@@ -51,13 +51,15 @@ void loop()
 {
 //   return;
   sensors.read(sensor_values);
-  if (sensor_values[0] > QTR_THRESHOLD) {
+  if ((sensor_values[0] > QTR_THRESHOLD) or (sensor_values[5] > QTR_THRESHOLD)) {
      motors.setLeftSpeed(0);  
      motors.setRightSpeed(0);
-  };  
-  if (sensor_values[5] > QTR_THRESHOLD){
+     Serial.print("z}"); 
+     motors.setLeftSpeed(-200);  
+     motors.setRightSpeed(-200);
+     delay(150);
      motors.setLeftSpeed(0);  
-     motors.setRightSpeed(0);
+     motors.setRightSpeed(0);      
   };  
   char re;
   char buf[7];
@@ -83,7 +85,7 @@ void loop()
           case RIGHT_BACKWARD:  motors.setRightSpeed(-200);   break;   
           case RIGHT_STOP:      motors.setRightSpeed(0); break; 
           case BOTH_FORWARD:    motors.setLeftSpeed(200);  motors.setRightSpeed(200); break; 
-          case BOTH_BACKWARD:   motors.setLeftSpeed(-200);  motors.setRightSpeed(-200);;  break;  
+          case BOTH_BACKWARD:   motors.setLeftSpeed(-200);  motors.setRightSpeed(-200);  break;  
           case BOTH_BOTH:       motors.setLeftSpeed(0);  motors.setRightSpeed(0);    break;  
           //case SERVO_FORWARD:   topServoPos = topServoPos + 5; setTopServoPos(topServoPos);
           //case SERVO_BACKWARD:  topServoPos = topServoPos - 5; setTopServoPos(topServoPos);
@@ -91,12 +93,20 @@ void loop()
       
     }
   }   
-  if ((millis()-time) > 100) {
+  if ((millis()-time) > 250) {
      time = millis();
      Serial.print(sensor_values[0]); 
-     Serial.println("}"); 
+     Serial.print(","); 
+     Serial.print(sensor_values[1]); 
+     Serial.print(","); 
+     Serial.print(sensor_values[2]); 
+     Serial.print(","); 
+     Serial.print(sensor_values[3]); 
+     Serial.print(","); 
+     Serial.print(sensor_values[4]); 
+     Serial.print(","); 
      Serial.print(sensor_values[5]); 
-     Serial.println("}"); 
+     Serial.print("}"); 
   }   
 }
 
