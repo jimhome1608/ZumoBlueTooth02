@@ -69,13 +69,14 @@ public LSM303
     unsigned long timestamp;
     int x;
     int y;
+    int z;
     float dir;
   } 
   acc_data_xy;
 
 public: 
   Accelerometer() : 
-  ra_x(RA_SIZE), ra_y(RA_SIZE) {
+  ra_x(RA_SIZE), ra_y(RA_SIZE), ra_z(RA_SIZE) {
   };
   ~Accelerometer() {
   };
@@ -85,13 +86,14 @@ public:
   float dir_xy() const;
   int x_avg(void) const;
   int y_avg(void) const;
-  int z;
+  int z_avg(void) const;
   long ss_xy_avg(void) const;
   float dir_xy_avg(void) const;
 private:
   acc_data_xy last;
   RunningAverage<int> ra_x;
-  RunningAverage<int> ra_y;   
+  RunningAverage<int> ra_y; 
+  RunningAverage<int> ra_z;   
 };
 
 Accelerometer lsm303;
@@ -135,27 +137,45 @@ void setup()
   time = millis();
 }
 
-void on_contact_made()
-{
-  in_contact = true;
-  setLeftMotorSpeed(0);  
-  setRightMotorSpeed(0);
-  last_motor_change = millis();
-  Serial.print("z}"); 
-  buzzer.playNote(NOTE_G(3), 200, 15);
-  //buzzer.playFromProgramSpace(sound_effect);
-}
 
 bool check_for_contact()
 {
   if ( (speedRight == 0) && (speedLeft == 0) ) 
-   return(0);
+    return(0);  
   long int _avg = 0;
   static long threshold_squared = (long) XY_ACCELERATION_THRESHOLD * (long) XY_ACCELERATION_THRESHOLD;
   _avg = lsm303.ss_xy_avg();
   bool _result=  (_avg >  threshold_squared);
   if ((millis() -last_motor_change)  < 400)
     _result = 0;
+  if (_result) {
+    setLeftMotorSpeed(0);  
+    setRightMotorSpeed(0);
+    last_motor_change = millis();
+    Serial.print("z}"); 
+    Serial.print("hit}");     
+    buzzer.playNote(NOTE_C(1), 200, 15);
+    delay(1000);
+  }  
+  return(_result);
+}
+
+bool check_tilt()
+{
+  if ( (speedRight == 0) && (speedLeft == 0) ) 
+    return(0);  
+  bool _result= (abs(lsm303.z_avg()) > 1000);   
+  if ((millis() -last_motor_change)  < 400)
+    _result = 0;
+  if (_result) {
+    setLeftMotorSpeed(0);  
+    setRightMotorSpeed(0);
+    last_motor_change = millis();
+    Serial.print("z}"); 
+    Serial.print("tilt}");     
+    buzzer.playNote(NOTE_C(2), 200, 15);
+    delay(1000);
+  }    
   return(_result);
 }
 
@@ -180,9 +200,8 @@ void loop()
   //   return;
   sensors.read(sensor_values);
   lsm303.readAcceleration(loop_start_time); 
-  if (check_for_contact()) {
-    on_contact_made();
-  }
+  check_for_contact();
+  check_tilt();
   //return;
   if ( (speedRight > 0) || (speedLeft > 0) ) {
       if ((sensor_values[0] > QTR_THRESHOLD) or (sensor_values[5] > QTR_THRESHOLD)) {
@@ -190,6 +209,7 @@ void loop()
         setRightMotorSpeed(0);
         Serial.print("z}"); 
         buzzer.playNote(NOTE_C(3), 200, 15);
+        delay(1000);
         /*setLeftMotorSpeed(-200);  
         setRightMotorSpeed(-200);
         delay(150);
@@ -251,20 +271,25 @@ void loop()
     }
   }   
   if ((millis()-time) > 250) {
+   /* Serial.print(lsm303.x_avg()); 
+    Serial.print(",");
+    Serial.print(lsm303.y_avg());
+    Serial.print(",");
+     Serial.println(lsm303.z_avg()); 
+     */
     time = millis();
+    
     Serial.print(sensor_values[0]); 
     Serial.print(","); 
     Serial.print(sensor_values[1]); 
     Serial.print(","); 
     Serial.print(sensor_values[2]); 
     Serial.print(","); 
-    Serial.print(lsm303.z); 
+    Serial.print(lsm303.z_avg()); 
     Serial.print(","); 
     Serial.print(sensor_values[4]); 
     Serial.print(","); 
     Serial.print(sensor_values[5]); 
-    //Serial.print(","); 
-    //Serial.print(lsm303.z);     
     Serial.println("}"); 
   } 
 
@@ -286,14 +311,15 @@ void Accelerometer::readAcceleration(unsigned long timestamp)
 {
   readAcc();
   if (a.x == last.x && a.y == last.y) return;
-  z = a.z;
 
   last.timestamp = timestamp;
   last.x = a.x;
   last.y = a.y;
+  last.z = a.z;
 
   ra_x.addValue(last.x);
   ra_y.addValue(last.y);
+  ra_z.addValue(last.y);
 }
 
 float Accelerometer::len_xy() const
@@ -309,6 +335,11 @@ float Accelerometer::dir_xy() const
 int Accelerometer::x_avg(void) const
 {
   return ra_x.getAverage();
+}
+
+int Accelerometer::z_avg(void) const
+{
+  return ra_z.getAverage();
 }
 
 int Accelerometer::y_avg(void) const
