@@ -18,7 +18,7 @@
 #define QTR_THRESHOLD  1000 // microseconds                                  
 // Accelerometer Settings
 #define RA_SIZE 3  // number of readings to include in running average of accelerometer readings
-#define XY_ACCELERATION_THRESHOLD 2400  // for detection of contact (~16000 = magnitude of acceleration due to gravity)
+#define XY_ACCELERATION_THRESHOLD 2400  // 2400 for detection of contact (~16000 = magnitude of acceleration due to gravity)
 
 
 const char LED_OFF =        '0';
@@ -37,10 +37,9 @@ const char SERVO_BACKWARD  =     'C';
 //-------------------------------
 
 unsigned long loop_start_time;
-unsigned long last_turn_time;
-unsigned long contact_made_time;
-#define MIN_DELAY_AFTER_TURN          400  // ms = min delay before detecting contact event
-#define MIN_DELAY_BETWEEN_CONTACTS   1000  // ms = min delay between detecting new contact event
+unsigned long last_motor_change = 0;
+int speedLeft = 0;
+int speedRight = 0;
 
 template <typename T> 
 class RunningAverage
@@ -86,6 +85,7 @@ public:
   float dir_xy() const;
   int x_avg(void) const;
   int y_avg(void) const;
+  int z;
   long ss_xy_avg(void) const;
   float dir_xy_avg(void) const;
 private:
@@ -138,19 +138,42 @@ void setup()
 void on_contact_made()
 {
   in_contact = true;
-  contact_made_time = loop_start_time;
-  motors.setLeftSpeed(0);  
-  motors.setRightSpeed(0);
-  buzzer.playFromProgramSpace(sound_effect);
+  setLeftMotorSpeed(0);  
+  setRightMotorSpeed(0);
+  last_motor_change = millis();
+  Serial.print("z}"); 
+  buzzer.playNote(NOTE_G(3), 200, 15);
+  //buzzer.playFromProgramSpace(sound_effect);
 }
 
 bool check_for_contact()
 {
+  if ( (speedRight == 0) && (speedLeft == 0) ) 
+   return(0);
+  long int _avg = 0;
   static long threshold_squared = (long) XY_ACCELERATION_THRESHOLD * (long) XY_ACCELERATION_THRESHOLD;
-  return (lsm303.ss_xy_avg() >  threshold_squared) && \
-    (loop_start_time - last_turn_time > MIN_DELAY_AFTER_TURN) && \
-    (loop_start_time - contact_made_time > MIN_DELAY_BETWEEN_CONTACTS);
+  _avg = lsm303.ss_xy_avg();
+  bool _result=  (_avg >  threshold_squared);
+  if ((millis() -last_motor_change)  < 400)
+    _result = 0;
+  return(_result);
 }
+
+void setLeftMotorSpeed(int _speed)
+{
+  motors.setLeftSpeed(_speed);
+  if (_speed != speedLeft)
+     last_motor_change = millis(); 
+  speedLeft = _speed;
+}  
+
+void setRightMotorSpeed(int _speed)
+{
+  motors.setRightSpeed(_speed);
+  if (_speed != speedRight)
+     last_motor_change = millis(); 
+  speedRight = _speed;
+} 
 
 void loop()
 {
@@ -160,16 +183,20 @@ void loop()
   if (check_for_contact()) {
     on_contact_made();
   }
-  if ((sensor_values[0] > QTR_THRESHOLD) or (sensor_values[5] > QTR_THRESHOLD)) {
-    motors.setLeftSpeed(0);  
-    motors.setRightSpeed(0);
-    Serial.print("z}"); 
-    motors.setLeftSpeed(-200);  
-    motors.setRightSpeed(-200);
-    delay(150);
-    motors.setLeftSpeed(0);  
-    motors.setRightSpeed(0);      
-  };  
+  //return;
+  if ( (speedRight > 0) || (speedLeft > 0) ) {
+      if ((sensor_values[0] > QTR_THRESHOLD) or (sensor_values[5] > QTR_THRESHOLD)) {
+        setLeftMotorSpeed(0);  
+        setRightMotorSpeed(0);
+        Serial.print("z}"); 
+        buzzer.playNote(NOTE_C(3), 200, 15);
+        /*setLeftMotorSpeed(-200);  
+        setRightMotorSpeed(-200);
+        delay(150);
+        setLeftMotorSpeed(0);  
+        setRightMotorSpeed(0);  */    
+      };  
+  };
   char re;
   char buf[7];
   re = ' ';
@@ -187,35 +214,35 @@ void loop()
         Serial.print(re); 
         Serial.print('}');
         break;  
-      case LEFT_FORWARD:    
-        motors.setLeftSpeed(200);   
+      case LEFT_FORWARD:   
+        setLeftMotorSpeed(200);   
         break;  //Serial.print(re); Serial.print('}');
       case LEFT_BACKWARD:   
-        motors.setLeftSpeed(-200);  
+        setLeftMotorSpeed(-200);  
         break;   
       case LEFT_STOP:       
-        motors.setLeftSpeed(0);  
+        setLeftMotorSpeed(0);  
         break; 
       case RIGHT_FORWARD:   
-        motors.setRightSpeed(200); 
+        setRightMotorSpeed(200); 
         break;  
       case RIGHT_BACKWARD:  
-        motors.setRightSpeed(-200);   
+        setRightMotorSpeed(-200);   
         break;   
       case RIGHT_STOP:      
-        motors.setRightSpeed(0); 
+        setRightMotorSpeed(0); 
         break; 
       case BOTH_FORWARD:    
-        motors.setLeftSpeed(200);  
-        motors.setRightSpeed(200); 
+        setLeftMotorSpeed(200);  
+        setRightMotorSpeed(200); 
         break; 
       case BOTH_BACKWARD:   
-        motors.setLeftSpeed(-200);  
-        motors.setRightSpeed(-200);  
+        setLeftMotorSpeed(-200);  
+        setRightMotorSpeed(-200);  
         break;  
       case BOTH_BOTH:       
-        motors.setLeftSpeed(0);  
-        motors.setRightSpeed(0);    
+        setLeftMotorSpeed(0);  
+        setRightMotorSpeed(0);    
         break;  
         //case SERVO_FORWARD:   topServoPos = topServoPos + 5; setTopServoPos(topServoPos);
         //case SERVO_BACKWARD:  topServoPos = topServoPos - 5; setTopServoPos(topServoPos);
@@ -231,13 +258,15 @@ void loop()
     Serial.print(","); 
     Serial.print(sensor_values[2]); 
     Serial.print(","); 
-    Serial.print(sensor_values[3]); 
+    Serial.print(lsm303.z); 
     Serial.print(","); 
     Serial.print(sensor_values[4]); 
     Serial.print(","); 
     Serial.print(sensor_values[5]); 
-    Serial.print("}"); 
-  }   
+    //Serial.print(","); 
+    //Serial.print(lsm303.z);     
+    Serial.println("}"); 
+  } 
 
 }
 
@@ -257,6 +286,7 @@ void Accelerometer::readAcceleration(unsigned long timestamp)
 {
   readAcc();
   if (a.x == last.x && a.y == last.y) return;
+  z = a.z;
 
   last.timestamp = timestamp;
   last.x = a.x;
