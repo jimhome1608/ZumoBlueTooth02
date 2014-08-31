@@ -18,25 +18,26 @@
 #define QTR_THRESHOLD  1000 // microseconds                                  
 // Accelerometer Settings
 #define RA_SIZE 3  // number of readings to include in running average of accelerometer readings
-#define XY_ACCELERATION_THRESHOLD 2400  // 2400 for detection of contact (~16000 = magnitude of acceleration due to gravity)
 
 
-const char LED_OFF =        '0';
-const char LED_ON  =        '1';
-const char LEFT_FORWARD  =  '2';
-const char LEFT_BACKWARD =  '3';
-const char LEFT_STOP  =     '4';
-const char RIGHT_FORWARD  = '5';
-const char RIGHT_BACKWARD = '6';
-const char RIGHT_STOP  =    '7';
-const char BOTH_FORWARD  =  '8';
-const char BOTH_BACKWARD  = '9';
-const char BOTH_BOTH  =     'A';
-const char SERVO_FORWARD  =      'B';
-const char SERVO_BACKWARD  =     'C';
+
+const char LED_OFF =        'A';
+const char LED_ON  =        'B';
+const char LEFT_FORWARD  =  'C';
+const char LEFT_BACKWARD =  'D';
+const char LEFT_STOP  =     'E';
+const char RIGHT_FORWARD  = 'F';
+const char RIGHT_BACKWARD = 'G';
+const char RIGHT_STOP  =    'H';
+const char BOTH_FORWARD  =  'I';
+const char BOTH_BACKWARD  = 'J';
+const char BOTH_BOTH  =     'K';
+const char GO_LEFT  =       'L';
+const char GO_RIGHT  =      'M';
 //-------------------------------
 
 unsigned long loop_start_time;
+unsigned long last_sent_readings;
 unsigned long last_motor_change = 0;
 int speedLeft = 0;
 int speedRight = 0;
@@ -99,28 +100,12 @@ private:
 Accelerometer lsm303;
 boolean in_contact;  // set when accelerometer detects contact with opposing robot
 
-unsigned long time;
+
 
 ZumoMotors motors;
 #define NUM_SENSORS 6
 unsigned int sensor_values[NUM_SENSORS];
 ZumoReflectanceSensorArray sensors(QTR_NO_EMITTER_PIN);
-
-// these might need to be tuned for different motor types
-#define REVERSE_SPEED     200 // 0 is stopped, 400 is full speed
-#define TURN_SPEED        200
-#define SEARCH_SPEED      200
-#define SUSTAINED_SPEED   400 // switches to SUSTAINED_SPEED from FULL_SPEED after FULL_SPEED_DURATION_LIMIT ms
-#define FULL_SPEED        400
-#define STOP_DURATION     100 // ms
-#define REVERSE_DURATION  200 // ms
-#define TURN_DURATION     300 // ms
-#define RIGHT 1
-#define LEFT -1
-enum ForwardSpeed { SearchSpeed, SustainedSpeed, FullSpeed };
-ForwardSpeed _forwardSpeed;  // current forward speed setting
-unsigned long full_speed_start_time;
-#define FULL_SPEED_DURATION_LIMIT     250  // ms
 
 ZumoBuzzer buzzer;
 const char sound_effect[] PROGMEM = "O4 T100 V15 L4 MS g12>c12>e12>G6>E12 ML>G2"; // "charge" melody
@@ -134,12 +119,13 @@ void setup()
   Wire.begin();
   lsm303.init();
   lsm303.enable();
-  time = millis();
+  last_sent_readings = 0;
 }
 
 
 bool check_for_contact()
 {
+  int XY_ACCELERATION_THRESHOLD = 3000;  // 2400 for detection of contact (~16000 = magnitude of acceleration due to gravity)
   if ( (speedRight == 0) && (speedLeft == 0) ) 
     return(0);  
   long int _avg = 0;
@@ -152,8 +138,7 @@ bool check_for_contact()
     setLeftMotorSpeed(0);  
     setRightMotorSpeed(0);
     last_motor_change = millis();
-    Serial.print("z}"); 
-    Serial.print("hit}");     
+    Serial.print("z Hit}");     
     buzzer.playNote(NOTE_C(1), 200, 15);
     delay(1000);
   }  
@@ -171,47 +156,92 @@ bool check_tilt()
     setLeftMotorSpeed(0);  
     setRightMotorSpeed(0);
     last_motor_change = millis();
-    Serial.print("z}"); 
-    Serial.print("tilt}");     
+    Serial.print("z Tilt}");     
     buzzer.playNote(NOTE_C(2), 200, 15);
     delay(1000);
   }    
   return(_result);
 }
 
-void setLeftMotorSpeed(int _speed)
+void setLeftMotorSpeed(double  _perecent)
 {
+  int _speed = floor(400 * _perecent);
   motors.setLeftSpeed(_speed);
   if (_speed != speedLeft)
      last_motor_change = millis(); 
   speedLeft = _speed;
 }  
 
-void setRightMotorSpeed(int _speed)
+
+void setRightMotorSpeed(double  _perecent)
 {
+ int _speed = floor(400 * _perecent); 
   motors.setRightSpeed(_speed);
   if (_speed != speedRight)
      last_motor_change = millis(); 
   speedRight = _speed;
 } 
 
-void loop()
+void goLeft()
 {
-  //   return;
+  int _delay = 30;
+  for (int i=0;i<5;i++) {
+     setRightMotorSpeed(0.75);  
+     delay(_delay);
+     setRightMotorSpeed(0);  
+     setLeftMotorSpeed(0.75);
+     delay(_delay);
+     setLeftMotorSpeed(0); 
+     setRightMotorSpeed(-0.75);  
+     delay(_delay);
+     setRightMotorSpeed(0);  
+     setLeftMotorSpeed(-0.75);
+     delay(_delay);
+     setLeftMotorSpeed(0);
+ }
+}
+
+void goRight()
+{
+  int _delay = 30;
+  for (int i=0;i<5;i++) {
+     //setLeftMotorSpeed(THREE_QUARTER_SPEED); 
+     setLeftMotorSpeed(0.75);
+     delay(_delay);
+     setLeftMotorSpeed(0);  
+     setRightMotorSpeed(0.75);
+     delay(_delay);
+     setRightMotorSpeed(0); 
+     setLeftMotorSpeed(-0.75);
+     delay(_delay);
+     setLeftMotorSpeed(0);  
+     setRightMotorSpeed(-0.75);
+     delay(_delay);
+     setRightMotorSpeed(0);
+ }
+}
+
+void loop()
+{  
+  double _runningSpeed = 0.75;
   sensors.read(sensor_values);
   lsm303.readAcceleration(loop_start_time); 
-  check_for_contact();
-  check_tilt();
+  boolean _RunningForward =  (speedRight > 0) && (speedLeft > 0);
+  boolean _RunningBackward =  (speedRight < 0) && (speedLeft < 0);
+  if ( _RunningForward || _RunningBackward ) {
+     check_for_contact();
+  }
+  //check_tilt();
   //return;
   if ( (speedRight > 0) || (speedLeft > 0) ) {
       if ((sensor_values[0] > QTR_THRESHOLD) or (sensor_values[5] > QTR_THRESHOLD)) {
         setLeftMotorSpeed(0);  
         setRightMotorSpeed(0);
-        Serial.print("z}"); 
+         Serial.print("z Edge}"); 
         buzzer.playNote(NOTE_C(3), 200, 15);
         delay(1000);
-        /*setLeftMotorSpeed(-200);  
-        setRightMotorSpeed(-200);
+        /*setLeftMotorSpeed(-1.0);  
+        setRightMotorSpeed(-1.0);
         delay(150);
         setLeftMotorSpeed(0);  
         setRightMotorSpeed(0);  */    
@@ -226,73 +256,64 @@ void loop()
       switch(re) {
       case LED_OFF: 
         digitalWrite(13,LOW); 
-        Serial.print(re); 
-        Serial.print('}');
         break;  
       case LED_ON: 
         digitalWrite(13,HIGH); 
-        Serial.print(re); 
-        Serial.print('}');
         break;  
       case LEFT_FORWARD:   
-        setLeftMotorSpeed(200);   
-        break;  //Serial.print(re); Serial.print('}');
+        setLeftMotorSpeed(_runningSpeed);   
+        break;  
       case LEFT_BACKWARD:   
-        setLeftMotorSpeed(-200);  
+        setLeftMotorSpeed(-_runningSpeed);  
         break;   
       case LEFT_STOP:       
         setLeftMotorSpeed(0);  
         break; 
       case RIGHT_FORWARD:   
-        setRightMotorSpeed(200); 
+        setRightMotorSpeed(_runningSpeed); 
         break;  
       case RIGHT_BACKWARD:  
-        setRightMotorSpeed(-200);   
+        setRightMotorSpeed(-_runningSpeed);   
         break;   
       case RIGHT_STOP:      
         setRightMotorSpeed(0); 
         break; 
       case BOTH_FORWARD:    
-        setLeftMotorSpeed(200);  
-        setRightMotorSpeed(200); 
+        setLeftMotorSpeed(_runningSpeed);  
+        setRightMotorSpeed(_runningSpeed); 
         break; 
       case BOTH_BACKWARD:   
-        setLeftMotorSpeed(-200);  
-        setRightMotorSpeed(-200);  
+        setLeftMotorSpeed(-_runningSpeed);  
+        setRightMotorSpeed(-_runningSpeed);  
         break;  
       case BOTH_BOTH:       
         setLeftMotorSpeed(0);  
         setRightMotorSpeed(0);    
         break;  
-        //case SERVO_FORWARD:   topServoPos = topServoPos + 5; setTopServoPos(topServoPos);
-        //case SERVO_BACKWARD:  topServoPos = topServoPos - 5; setTopServoPos(topServoPos);
+      case GO_LEFT:   
+        goLeft();
+        break; 
+      case GO_RIGHT:  
+        goRight();
+        break; 
       }  
-
     }
-  }   
-  if ((millis()-time) > 250) {
-   /* Serial.print(lsm303.x_avg()); 
-    Serial.print(",");
-    Serial.print(lsm303.y_avg());
-    Serial.print(",");
-     Serial.println(lsm303.z_avg()); 
-     */
-    time = millis();
-    
+  }  
+  if ((millis()-last_sent_readings) > 250) {
+    last_sent_readings = millis();
     Serial.print(sensor_values[0]); 
     Serial.print(","); 
     Serial.print(sensor_values[1]); 
     Serial.print(","); 
     Serial.print(sensor_values[2]); 
     Serial.print(","); 
-    Serial.print(lsm303.z_avg()); 
+    Serial.print(sensor_values[3]); 
     Serial.print(","); 
     Serial.print(sensor_values[4]); 
     Serial.print(","); 
     Serial.print(sensor_values[5]); 
     Serial.println("}"); 
   } 
-
 }
 
 void Accelerometer::enable(void)
