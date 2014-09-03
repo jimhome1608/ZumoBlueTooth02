@@ -42,6 +42,8 @@ unsigned long last_motor_change = 0;
 int speedLeft = 0;
 int speedRight = 0;
 
+double _runningSpeed = 0;
+
 template <typename T> 
 class RunningAverage
 {
@@ -223,7 +225,7 @@ void goRight()
 
 void loop()
 {  
-  double _runningSpeed = 0.75;
+  
   sensors.read(sensor_values);
   lsm303.readAcceleration(loop_start_time); 
   boolean _RunningForward =  (speedRight > 0) && (speedLeft > 0);
@@ -247,12 +249,22 @@ void loop()
         setRightMotorSpeed(0);  */    
       };  
   };
-  char re;
-  char buf[7];
-  re = ' ';
+  char re = ' ';
+  char dat= ' ';
+  
   if (Serial.available()>0) {
     while (Serial.available()>0) {
       re = Serial.read();
+      if (Serial.available()>0) {
+        dat = Serial.read();
+        _runningSpeed = (dat-48);
+        if (_runningSpeed ==0)
+           _runningSpeed = 1;
+        else
+        {
+          _runningSpeed = _runningSpeed/10;
+        }  
+      }
       switch(re) {
       case LED_OFF: 
         digitalWrite(13,LOW); 
