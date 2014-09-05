@@ -257,13 +257,8 @@ void loop()
       re = Serial.read();
       if (Serial.available()>0) {
         dat = Serial.read();
-        _runningSpeed = (dat-48);
-        if (_runningSpeed ==0)
-           _runningSpeed = 1;
-        else
-        {
-          _runningSpeed = _runningSpeed/10;
-        }  
+        _runningSpeed = (dat-48);// CONVERTS ASCII "0" TO BINARY 0 NOT CONFIDENT ABOUT THIS BUT SEEMS TO WORK
+        _runningSpeed = _runningSpeed/10;
       }
       switch(re) {
       case LED_OFF: 
